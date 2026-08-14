@@ -1,0 +1,26 @@
+{
+  "name": "footage-crawler",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "tsx src/cli.ts start",
+    "search": "tsx src/cli.ts search",
+    "review": "tsx src/cli.ts review",
+    "pick": "tsx src/cli.ts pick",
+    "download": "tsx src/cli.ts download",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "tsx": "^4.23.12",
+    "typescript": "^7.0.2"
+  }
+}

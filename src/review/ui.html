@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Footage review</title>
+    <style>
+      :root {
+        --bg: #111114;
+        --panel: #1b1b20;
+        --line: #2c2c34;
+        --text: #ececef;
+        --muted: #9a9aa3;
+        --accent: #6ea8ff;
+        --ok: #3dd68c;
+        --warn: #e6b84d;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font: 14px/1.45 ui-sans-serif, system-ui, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 14px 20px;
+        background: var(--bg);
+        border-bottom: 1px solid var(--line);
+      }
+      header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+      header .meta { color: var(--muted); flex: 1; }
+      button {
+        border: 1px solid var(--line);
+        background: var(--panel);
+        color: var(--text);
+        padding: 8px 12px;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      button.primary {
+        background: var(--accent);
+        color: #0b1220;
+        border-color: transparent;
+        font-weight: 600;
+      }
+      button:disabled { opacity: 0.5; cursor: default; }
+      main { padding: 20px; max-width: 1100px; margin: 0 auto; }
+      .scene {
+        margin-bottom: 36px;
+        padding-bottom: 28px;
+        border-bottom: 1px solid var(--line);
+      }
+      .scene-head { display: flex; gap: 12px; align-items: baseline; margin-bottom: 10px; flex-wrap: wrap; }
+      .scene-head h2 { margin: 0; font-size: 15px; }
+      .pill {
+        font-size: 11px;
+        color: var(--muted);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 2px 8px;
+      }
+      .pill.ok { color: var(--ok); border-color: #245c42; }
+      .pill.manual { color: var(--warn); border-color: #6a5420; }
+      .narration { color: var(--muted); margin: 0 0 12px; }
+      .player {
+        background: #000;
+        border-radius: 8px;
+        overflow: hidden;
+        aspect-ratio: 16 / 9;
+        position: relative;
+      }
+      .player video, .player img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        display: block;
+        background: #000;
+      }
+      .player .missing {
+        color: var(--warn);
+        display: grid;
+        place-items: center;
+        height: 100%;
+      }
+      .player-bar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 0 14px;
+      }
+      .player-bar .who { color: var(--muted); font-size: 12px; flex: 1; }
+      .player-bar a { color: var(--accent); text-decoration: none; }
+      .thumbs {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+        gap: 10px;
+      }
+      .thumb {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        overflow: hidden;
+        cursor: pointer;
+        text-align: left;
+        padding: 0;
+        width: 100%;
+      }
+      .thumb.watching { border-color: var(--accent); }
+      .thumb.selected { outline: 1px solid var(--ok); }
+      .thumb .media {
+        aspect-ratio: 16 / 9;
+        background: #000;
+        position: relative;
+      }
+      .thumb img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+      }
+      .badge {
+        position: absolute;
+        top: 6px;
+        left: 6px;
+        background: #000a;
+        color: #fff;
+        font-size: 11px;
+        padding: 2px 6px;
+        border-radius: 4px;
+      }
+      .thumb .cap { padding: 6px 8px; color: var(--muted); font-size: 12px; }
+      .status { color: var(--muted); white-space: pre-wrap; margin: 0 12px 0 auto; }
+      .empty { color: var(--warn); }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1 id="title">Footage review</h1>
+      <div class="meta" id="meta"></div>
+      <p class="status" id="status"></p>
+      <button class="primary" id="download">Download selected</button>
+    </header>
+    <main id="root"></main>
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const root = $("root");
+      const statusEl = $("status");
+      let manifest = null;
+      const watching = {};
+
+      function creditLine(c) {
+        const site =
+          c.provider === "pexels" ? "Pexels" :
+          c.provider === "pixabay" ? "Pixabay" : "Unsplash";
+        let href = c.pageUrl || "#";
+        if (c.provider === "unsplash") {
+          const join = href.includes("?") ? "&" : "?";
+          href += join + "utm_source=footage_crawler&utm_medium=referral";
+        }
+        const who = c.creatorUrl
+          ? `<a href="${c.creatorUrl}" target="_blank" rel="noreferrer">${esc(c.creator)}</a>`
+          : esc(c.creator);
+        return `${c.kind === "video" ? "Video" : "Photo"} by ${who} on <a href="${href}" target="_blank" rel="noreferrer">${site}</a>`;
+      }
+
+      function esc(s) {
+        return String(s ?? "").replace(/[&<>"']/g, (ch) => ({
+          "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+        }[ch]));
+      }
+
+      function watchingOf(scene) {
+        return watching[scene.id] || scene.selectedId || scene.shortlist[0]?.id;
+      }
+
+      function candidate(scene, id) {
+        return scene.shortlist.find((c) => c.id === id) || scene.shortlist[0];
+      }
+
+      function playerHtml(c) {
+        if (!c) return `<div class="missing">Không có clip</div>`;
+        if (c.kind === "image") {
+          return `<img src="${esc(c.previewUrl || c.thumbnailUrl)}" alt="" />`;
+        }
+        if (!c.previewUrl) {
+          return `<div class="missing">Chưa có file preview. Restart review sau khi hydrate.</div>`;
+        }
+        return `<video controls muted autoplay loop playsinline poster="${esc(c.thumbnailUrl)}" src="${esc(c.previewUrl)}"></video>`;
+      }
+
+      function render() {
+        if (!manifest) return;
+        $("title").textContent = manifest.project;
+        const matched = manifest.scenes.filter((s) => s.status === "matched").length;
+        const manual = manifest.scenes.filter((s) => s.status === "manual").length;
+        $("meta").textContent = `${matched} stock · ${manual} làm tay · ${manifest.aspect}`;
+        root.innerHTML = manifest.scenes.map((scene) => {
+          if (scene.status === "manual") {
+            return `<section class="scene">
+              <div class="scene-head">
+                <h2>${esc(scene.id)}</h2>
+                <span class="pill manual">${esc(scene.source)}</span>
+                <span class="pill">${scene.kind === "image" ? "photo" : "video"}</span>
+              </div>
+              <div class="player"><div class="missing">Làm tay — không search stock</div></div>
+              <p class="narration">${esc(scene.keywordRaw || scene.queryUsed)}</p>
+            </section>`;
+          }
+          if (!scene.shortlist.length) {
+            return `<section class="scene"><div class="scene-head"><h2>${esc(scene.id)}</h2><span class="pill">unmatched</span></div><p class="empty">Không có footage.</p></section>`;
+          }
+          const current = candidate(scene, watchingOf(scene));
+          const isSelected = current && current.id === scene.selectedId;
+          const thumbs = scene.shortlist.map((c) => {
+            const watch = c.id === current.id;
+            const selected = c.id === scene.selectedId;
+            const dur = c.durationSec ? `${c.durationSec}s` : c.kind;
+            return `<button type="button" class="thumb ${watch ? "watching" : ""} ${selected ? "selected" : ""}" data-scene="${esc(scene.id)}" data-id="${esc(c.id)}">
+              <div class="media">
+                <img src="${esc(c.thumbnailUrl)}" alt="" />
+                <span class="badge">${esc(c.provider)}${selected ? " · chọn" : ""}</span>
+              </div>
+              <div class="cap">${dur} · ${c.width}×${c.height}</div>
+            </button>`;
+          }).join("");
+          return `<section class="scene" data-scene="${esc(scene.id)}">
+            <div class="scene-head">
+              <h2>${esc(scene.id)}</h2>
+              <span class="pill ${scene.status === "matched" ? "ok" : ""}">${esc(scene.kind)} · ${scene.durationSec}s</span>
+              <span class="pill">${esc(scene.queryUsed)}</span>
+            </div>
+            ${scene.narration ? `<p class="narration">${esc(scene.narration)}</p>` : ""}
+            <div class="player">${playerHtml(current)}</div>
+            <div class="player-bar">
+              <div class="who">${current ? creditLine(current) : ""}</div>
+              <button type="button" class="primary pick" data-scene="${esc(scene.id)}" data-id="${esc(current?.id || "")}" ${isSelected ? "disabled" : ""}>
+                ${isSelected ? "Đang dùng clip này" : "Chọn clip này"}
+              </button>
+            </div>
+            <div class="thumbs">${thumbs}</div>
+          </section>`;
+        }).join("");
+
+        root.querySelectorAll(".thumb").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            watching[btn.dataset.scene] = btn.dataset.id;
+            render();
+          });
+        });
+        root.querySelectorAll(".pick").forEach((btn) => {
+          btn.addEventListener("click", () => pick(btn.dataset.scene, btn.dataset.id));
+        });
+      }
+
+      async function load() {
+        statusEl.textContent = "Đang tải…";
+        const res = await fetch("/api/manifest");
+        manifest = await res.json();
+        if (manifest.error) throw new Error(manifest.error);
+        for (const scene of manifest.scenes) {
+          watching[scene.id] = scene.selectedId;
+        }
+        statusEl.textContent = "Click thumbnail để preview · Chọn clip này khi ổn";
+        render();
+      }
+
+      async function pick(sceneId, candidateId) {
+        if (!candidateId) return;
+        statusEl.textContent = "Đang chọn…";
+        const res = await fetch("/api/pick", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ sceneId, candidateId }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          statusEl.textContent = data.error || "Lỗi pick";
+          return;
+        }
+        manifest = data;
+        watching[sceneId] = candidateId;
+        statusEl.textContent = `${sceneId} đã chọn`;
+        render();
+      }
+
+      $("download").addEventListener("click", async () => {
+        $("download").disabled = true;
+        statusEl.textContent = "Đang tải — xem log trên terminal…";
+        try {
+          const res = await fetch("/api/download", { method: "POST" });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "download failed");
+          statusEl.textContent = `Đã tải ${data.credits.length} file → ${data.projectDir}`;
+        } catch (err) {
+          statusEl.textContent = err.message || String(err);
+        } finally {
+          $("download").disabled = false;
+        }
+      });
+
+      load().catch((err) => {
+        statusEl.textContent = err.message || String(err);
+      });
+    </script>
+  </body>
+</html>

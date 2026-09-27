@@ -157,6 +157,7 @@
       function creditLine(c) {
         const site =
           c.provider === "pexels" ? "Pexels" :
+          c.provider === "coverr" ? "Coverr" :
           c.provider === "pixabay" ? "Pixabay" : "Unsplash";
         let href = c.pageUrl || "#";
         if (c.provider === "unsplash") {

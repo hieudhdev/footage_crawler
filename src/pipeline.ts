@@ -1,6 +1,13 @@
 import type { ProjectInput, SceneInput } from "./schema.ts";
 import { orientationFromAspect, minDims } from "./orientation.ts";
-import { passesHardFilter, rankCandidates } from "./rank.ts";
+import {
+  TARGET_SHORTLIST,
+  passesHardFilter,
+  pickDiverseShortlist,
+  quotasFor,
+  rankCandidates,
+  underQuota,
+} from "./rank.ts";
 import type {
   Candidate,
   MediaKind,
@@ -11,8 +18,6 @@ import type {
   SceneStatus,
 } from "./types.ts";
 
-const TARGET_SHORTLIST = 5;
-const STOP_AT = 8;
 const PER_PAGE = 15;
 
 export interface MatchedScene {
@@ -41,7 +46,9 @@ function providerOrder(
   adapters: ProviderAdapter[],
 ): ProviderAdapter[] {
   const preferred: Provider[] =
-    scene.kind === "video" ? ["pexels", "pixabay"] : ["unsplash", "pexels", "pixabay"];
+    scene.kind === "video"
+      ? ["pexels", "coverr", "pixabay"]
+      : ["unsplash", "pexels", "pixabay"];
   const byName = new Map(adapters.map((a) => [a.name, a]));
   const ordered: ProviderAdapter[] = [];
   for (const name of preferred) {
@@ -91,10 +98,26 @@ export async function matchScene(
   const queriesTried: string[] = [];
   const providersTried: Provider[] = [];
   let queryUsed = scene.queries.primary;
+  const rankOpts = {
+    query: scene.queries.primary,
+    durationSec: scene.durationSec,
+    minWidth,
+    minHeight,
+  };
+  const quotas = quotasFor(kind);
 
-  for (const query of queries) {
+  for (const [qi, query] of queries.entries()) {
+    const rankedSoFar = rankCandidates(collected, rankOpts);
+    const round =
+      qi === 0
+        ? providers
+        : providers.filter((adapter) => underQuota(rankedSoFar, adapter.name, quotas, TARGET_SHORTLIST));
+    if (!round.length) break;
+
     queriesTried.push(query);
-    for (const adapter of providers) {
+    queryUsed = query;
+
+    for (const adapter of round) {
       if (!providersTried.includes(adapter.name)) providersTried.push(adapter.name);
       log(`  ${scene.id} · ${adapter.name} · "${query}"`);
       try {
@@ -120,31 +143,33 @@ export async function matchScene(
         const message = err instanceof Error ? err.message : String(err);
         log(`  ! ${adapter.name} lỗi: ${message}`);
       }
-
-      const rankedSoFar = rankCandidates(collected, {
-        query: scene.queries.primary,
-        durationSec: scene.durationSec,
-        minWidth,
-        minHeight,
-      });
-      if (rankedSoFar.length >= STOP_AT) {
-        queryUsed = query;
-        return finish(scene, orientation, queryUsed, queriesTried, providersTried, rankedSoFar.slice(0, TARGET_SHORTLIST));
-      }
     }
-    if (collected.length >= TARGET_SHORTLIST) {
-      queryUsed = query;
-      break;
+
+    const ranked = rankCandidates(collected, rankOpts);
+    const quotasFilled = providers.every(
+      (adapter) => !underQuota(ranked, adapter.name, quotas, TARGET_SHORTLIST),
+    );
+    if (quotasFilled) {
+      return finish(
+        scene,
+        orientation,
+        queryUsed,
+        queriesTried,
+        providersTried,
+        pickDiverseShortlist(ranked, quotas, TARGET_SHORTLIST),
+      );
     }
   }
 
-  const ranked = rankCandidates(collected, {
-    query: scene.queries.primary,
-    durationSec: scene.durationSec,
-    minWidth,
-    minHeight,
-  });
-  return finish(scene, orientation, queryUsed, queriesTried, providersTried, ranked.slice(0, TARGET_SHORTLIST));
+  const ranked = rankCandidates(collected, rankOpts);
+  return finish(
+    scene,
+    orientation,
+    queryUsed,
+    queriesTried,
+    providersTried,
+    pickDiverseShortlist(ranked, quotas, TARGET_SHORTLIST),
+  );
 }
 
 function finish(

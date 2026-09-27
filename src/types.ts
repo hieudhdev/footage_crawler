@@ -1,4 +1,4 @@
-export const PROVIDERS = ["pexels", "pixabay", "unsplash"] as const;
+export const PROVIDERS = ["pexels", "coverr", "pixabay", "unsplash"] as const;
 export type Provider = (typeof PROVIDERS)[number];
 
 export const MEDIA_KINDS = ["video", "image"] as const;

@@ -1,6 +1,6 @@
 # Footage crawler
 
-Lấy stock footage theo project từ Pexels, Pixabay, Unsplash (API chính thức).
+Lấy stock footage theo project từ Pexels, Coverr, Pixabay, Unsplash (API chính thức).
 
 ## Setup
 
@@ -16,10 +16,13 @@ copy .env.example .env
 | Nền tảng | Biến | Lấy key |
 | --- | --- | --- |
 | Pexels | `PEXELS_API_KEY` | https://www.pexels.com/api/ |
+| Coverr | `COVERR_API_KEY` | https://coverr.co/developers |
 | Pixabay | `PIXABAY_API_KEY` | https://pixabay.com/api/docs/ |
 | Unsplash | `UNSPLASH_ACCESS_KEY` | https://unsplash.com/oauth/applications |
 
-Unsplash chỉ có ảnh (`type: photo`). Video: Pexels trước, Pixabay khi thiếu.
+Unsplash chỉ có ảnh (`type: photo`). Coverr chỉ có video.
+
+Video: Pexels / Coverr / Pixabay. Photo: Unsplash / Pexels / Pixabay. Mỗi scene shortlist 8 clip, chia 3-3-2 (thiếu thì bù từ nền tảng còn clip). Search cả 3 nền tảng ở keyword đầu; keyword sau chỉ gọi nền tảng chưa đủ quota.
 
 ## Chạy
 
@@ -80,4 +83,5 @@ projects/sample-project/
 - Một lần chạy = một JSON. Không crawl kho stock.
 - Review UI credit photographer (điều kiện API).
 - Unsplash: preview hotlink; download mới ping `download_location`.
-- Pixabay search cache 24h.
+- Pixabay / Coverr search cache 24h.
+- Coverr demo: 50 call/giờ. Chủ yếu 16:9.

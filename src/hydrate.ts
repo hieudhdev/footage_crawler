@@ -2,6 +2,7 @@ import type { AppConfig } from "./config.ts";
 import { httpJson } from "./http.ts";
 import type { Manifest } from "./manifest.ts";
 import { writeManifest } from "./manifest.ts";
+import { fetchCoverrVideoPreview } from "./providers/coverr.ts";
 import { fetchPexelsVideoPreview } from "./providers/pexels.ts";
 import type { Candidate } from "./types.ts";
 
@@ -79,6 +80,8 @@ export async function hydratePreviews(
     try {
       if (c.provider === "pexels" && cfg.pexelsApiKey) {
         c.previewUrl = await fetchPexelsVideoPreview(cfg.pexelsApiKey, c.sourceId);
+      } else if (c.provider === "coverr" && cfg.coverrApiKey) {
+        c.previewUrl = await fetchCoverrVideoPreview(cfg.coverrApiKey, c.sourceId);
       } else if (c.provider === "pixabay" && cfg.pixabayApiKey) {
         c.previewUrl = await pixabayVideoPreview(cfg.pixabayApiKey, c.sourceId);
       }

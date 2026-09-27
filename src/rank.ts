@@ -1,4 +1,22 @@
-import type { Candidate, MediaKind } from "./types.ts";
+import type { Candidate, MediaKind, Provider } from "./types.ts";
+
+export const TARGET_SHORTLIST = 8;
+
+export const VIDEO_QUOTAS: Partial<Record<Provider, number>> = {
+  pexels: 3,
+  coverr: 3,
+  pixabay: 2,
+};
+
+export const PHOTO_QUOTAS: Partial<Record<Provider, number>> = {
+  unsplash: 3,
+  pexels: 3,
+  pixabay: 2,
+};
+
+export function quotasFor(kind: MediaKind): Partial<Record<Provider, number>> {
+  return kind === "video" ? VIDEO_QUOTAS : PHOTO_QUOTAS;
+}
 
 const SLACK = 0.9;
 
@@ -76,4 +94,42 @@ export function rankCandidates(
     unique.push({ ...c, score: scoreCandidate(c, opts) });
   }
   return unique.sort((a, b) => b.score - a.score);
+}
+
+export function pickDiverseShortlist(
+  ranked: Candidate[],
+  quotas: Partial<Record<Provider, number>>,
+  target: number,
+): Candidate[] {
+  const picked: Candidate[] = [];
+  const used = new Set<string>();
+  const counts = new Map<Provider, number>();
+
+  for (const c of ranked) {
+    if (picked.length >= target) break;
+    const n = counts.get(c.provider) ?? 0;
+    const cap = quotas[c.provider] ?? target;
+    if (n >= cap) continue;
+    picked.push(c);
+    used.add(c.id);
+    counts.set(c.provider, n + 1);
+  }
+
+  for (const c of ranked) {
+    if (picked.length >= target) break;
+    if (used.has(c.id)) continue;
+    picked.push(c);
+  }
+
+  return picked;
+}
+
+export function underQuota(
+  ranked: Candidate[],
+  provider: Provider,
+  quotas: Partial<Record<Provider, number>>,
+  target: number,
+): boolean {
+  const cap = quotas[provider] ?? target;
+  return ranked.filter((c) => c.provider === provider).length < cap;
 }

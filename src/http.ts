@@ -14,6 +14,7 @@ export class HttpError extends Error {
 export function redactUrl(url: string): string {
   return url
     .replace(/([?&]key=)[^&]+/gi, "$1***")
+    .replace(/([?&]api_key=)[^&]+/gi, "$1***")
     .replace(/([?&]client_id=)[^&]+/gi, "$1***");
 }
 
